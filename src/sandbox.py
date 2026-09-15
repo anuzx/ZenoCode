@@ -1,8 +1,8 @@
-"""Kernel-enforced limits on what bash can touch — Linux edition.
+"""Kernel-enforced limits on what bash can touch.
 
-Policy: read anything, write only inside the project, no network.
-Enforced via bubblewrap (bwrap), which uses Linux namespaces to sandbox
-the process. Falls back to unsandboxed execution if bwrap isn't installed.
+One policy - read anything, write only inside the project, no network - and a
+different enforcement mechanism per OS. The idea ports; the mechanism never does.
+
 """
 
 import shutil
@@ -13,43 +13,60 @@ from pathlib import Path
 
 PROJECT = Path.cwd().resolve()
 
+PROFILE = f"""(version 1)
+(deny default)
+(allow process-exec process-fork signal)
+(allow file-read*)
+(allow sysctl-read)
+(deny network*)
+(allow file-write* (subpath "{PROJECT}") (literal "/dev/null"))
+(deny file-write* (subpath "{PROJECT}/.git"))
+"""
+
 
 def wrap(command):
-    """Wrap a shell command in a Linux sandbox (bubblewrap). None if unavailable."""
-    if not shutil.which("bwrap"):
-        return None
+    """Wrap a shell command in an OS sandbox. None means we have no sandbox."""
+    if sys.platform == "darwin":
+        profile = Path(tempfile.gettempdir()) / "neuralcode.sb"
+        profile.write_text(PROFILE)
+        return ["sandbox-exec", "-f", str(profile), "/bin/sh", "-c", command]
 
-    return [
-        "bwrap",
-        "--ro-bind",
-        "/",
-        "/",  # whole filesystem read-only...
-        "--bind",
-        str(PROJECT),
-        str(PROJECT),  # ...except the project, read-write
-        "--dev",
-        "/dev",
-        "--proc",
-        "/proc",
-        "--tmpfs",
-        "/tmp",
-        "--unshare-net",  # no network
-        "--unshare-pid",  # isolate process tree
-        "--die-with-parent",
-        "/bin/sh",
-        "-c",
-        command,
-    ]
+    if sys.platform.startswith("linux") and shutil.which("bwrap"):
+        return [
+            "bwrap",
+            "--ro-bind",
+            "/",
+            "/",  # whole filesystem read-only...
+            "--bind",
+            str(PROJECT),
+            str(PROJECT),  # ...except the project, read-write
+            "--dev",
+            "/dev",
+            "--proc",
+            "/proc",
+            "--tmpfs",
+            "/tmp",
+            "--unshare-net",  # no network
+            "--unshare-pid",  # isolate process tree
+            "--die-with-parent",
+            "/bin/sh",
+            "-c",
+            command,
+        ]
+
+    return None  # Windows, or Linux without bubblewrap
 
 
 def name():
-    if shutil.which("bwrap"):
+    if sys.platform == "darwin":
+        return "seatbelt"
+    if sys.platform.startswith("linux") and shutil.which("bwrap"):
         return "bubblewrap"
     return "none"
 
 
 def run(command, timeout=60):
-    """Run a command, sandboxed when bubblewrap is available."""
+    """Run a command, sandboxed when the OS lets us."""
     sandboxed = wrap(command)
     return subprocess.run(
         sandboxed or command,
