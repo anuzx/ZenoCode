@@ -1,7 +1,7 @@
 # function tool
 import subprocess
 
-from src.context import note_read
+from context import note_read
 
 
 # bash function

@@ -1,5 +1,8 @@
+from datetime import datetime
 import os
 import subprocess
+
+from todos import todos_prompt
 
 # alert the agent if a file has changed since it last read it ,this prevents the agent from editing based on stale info
 
@@ -12,7 +15,7 @@ def note_read(path: str):
 
 
 # while files have changed since the agent last read them (p is file path here)
-def stale_files():
+def changed_files():
     changed = []
 
     for p, mtime in SEEN.items():
@@ -32,9 +35,9 @@ def git(command):
 
 
 # creates a warning that we send eventually to the llm
-def stale_note():
+def changes_note():
     """warn about files that changed on disk since the agent read them"""
-    changed = stale_files()
+    changed = changed_files()
     if not changed:
         return ""
     return (
@@ -42,3 +45,21 @@ def stale_note():
         "These files changed since your last turn. Read them again before "
         "editing:\n" + "\n".join(changed) + "\n</system-reminder>"
     )
+
+
+def todos_note():
+    plan = todos_prompt()
+    return f"\n<todos>\n{plan}\n</todos>" if plan else ""
+
+
+def reminder():
+    """The block we append to the messages on every turn."""
+    return {
+        "role": "user",
+        "content": (
+            "<env>\n"
+            f"time: {datetime.now():%Y-%m-%d %H:%M}\n"
+            f"git branch: {git('branch --show-current').strip() or '(detached)'}\n"
+            "</env>" + todos_note() + changes_note()
+        ),
+    }
