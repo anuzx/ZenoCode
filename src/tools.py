@@ -1,6 +1,8 @@
 # function tool
 import subprocess
 
+from src.context import note_read
+
 
 # bash function
 def bash(command: str) -> str:
@@ -12,6 +14,7 @@ def bash(command: str) -> str:
 # read_file function
 def read_file(path: str) -> str:
     # read a file and return its content
+    note_read(path)#updates the mtime whenever the read_file tool is used
     with open(path) as f:
         return f.read()
 
