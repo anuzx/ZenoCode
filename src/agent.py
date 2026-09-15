@@ -1,6 +1,7 @@
 import json
 
 from main import call_llm
+from context import reminder
 from tools import TOOLS
 
 SYSTEM_PROMPT = """you are a coding agent. your job is to code. always code.
@@ -18,7 +19,7 @@ def main():
 
     while True:
         # ask the llm to do something
-        message = call_llm(messages)
+        message = call_llm(messages + [reminder()])
         # save its response to conversation
         messages.append(message.model_dump(exclude_none=True))
 
