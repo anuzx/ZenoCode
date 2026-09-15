@@ -1,13 +1,13 @@
 # function tool
-import subprocess
 
 from context import note_read
+from sandbox import run
 
 
 # bash function
 def bash(command: str) -> str:
     # run bash commands
-    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    result = run(command)
     return result.stdout + result.stderr
 
 
