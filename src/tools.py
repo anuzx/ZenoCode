@@ -1,7 +1,7 @@
 # function tool
 
-from context import note_read
-from sandbox import run
+from src.context import note_read
+from src.sandbox import run
 
 
 # bash function
