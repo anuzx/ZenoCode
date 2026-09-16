@@ -80,7 +80,7 @@ def render(messages):
 def summarize(messages):
     """One LLM call, no tools. Returns the handoff note."""
     response = client.chat.completions.create(
-        model="openrouter/free",
+        model=config.MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": render(messages)},

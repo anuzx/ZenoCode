@@ -1,5 +1,7 @@
 # function tool
 
+import json
+
 from src.context import note_read
 from src.sandbox import run
 
@@ -132,3 +134,10 @@ TOOLS = {
     "write_file": write_file,
     "str_replace": str_replace,
 }
+
+
+def execute(tool_call, tools=None):
+    lookup = tools or TOOLS
+    args = json.loads(tool_call.function.arguments)
+    result = lookup[tool_call.function.name](**args)
+    return args, result
