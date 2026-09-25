@@ -18,6 +18,7 @@ Four rules, and the code below is really just these:
   4. only its last message comes back         (the rest is discarded)
 """
 
+import json
 import os
 
 MAX_TURNS = 12  # a runaway explorer is worse than a missing answer
@@ -29,10 +30,10 @@ MAX_TURNS = 12  # a runaway explorer is worse than a missing answer
 # guest in someone else's session. Everything else it gets.
 #
 # Note this is a *structural* guarantee - those tools are simply not in the
-# list it is offered, so it cannot call them. The "do not edit files" rule in
-# the prompt below is only asking nicely. To make that one structural too, add
-# write_file and str_replace to this set.
-WITHHELD = {"task", "write_todos", "str_replace", "write"}
+# list it is offered, so it cannot call them. write_file and str_replace are
+# withheld too, so "read and report, never edit" is enforced structurally,
+# not just by asking nicely in the prompt below.
+WITHHELD = {"task", "write_todos", "str_replace", "write_file"}
 
 
 SYSTEM_PROMPT = f"""
@@ -47,8 +48,8 @@ You are working in {os.getcwd()}. Search inside it. Never search from / or
 from the home directory - that scans the whole machine and will time out.
 
 How to work:
-- Use bash, read_file and read_skill to find out what is actually true.
-  Prefer rg, grep and find to guess at where things live.
+- Use bash and read_file to find out what is actually true. Prefer rg, grep
+  and find to guess at where things live.
 - You are here to read and report, not to change anything. Do not write or
   edit files, and do not run commands with side effects.
 - Search in batches. Several greps in one turn beats one grep per turn.
@@ -65,7 +66,7 @@ is not.
 
 def toolset():
     """Every tool except the ones a guest should not hold."""
-    from .tools import TOOL_SCHEMAS
+    from src.tools import TOOL_SCHEMAS
 
     return [s for s in TOOL_SCHEMAS if s["function"]["name"] not in WITHHELD]
 
@@ -74,10 +75,11 @@ def task(description: str) -> str:
     """Run a fresh agent on one question and return only its final answer."""
     # Imported inside the function, not at the top: llm imports tools, and
     # tools imports us, so importing them up there would close the circle.
-    from .history import fit
-    from .main import call_llm
-    from .tools import execute
-    from .tui.ui import ui
+    from src.core.history import fit
+    from src.main import call_llm
+    from src.safety.permissions import check
+    from src.tools import execute
+    from src.tui.ui import ui
 
     # --- rule 1 ---
     # Two messages. Not a copy of the caller's transcript, not a trimmed
@@ -94,7 +96,12 @@ def task(description: str) -> str:
     # --- rule 3 ---
     # Compare this with the inner loop in agent.py: call, append, run the
     # tools, append, repeat. A subagent is not a new kind of thing. It is the
-    # loop you already have, pointed at a different list of messages.
+    # loop you already have, pointed at a different list of messages - and
+    # that includes the permission gate. A subagent is a second caller, not
+    # a privileged one, and its bash calls go through the same "ask/deny"
+    # rules the main agent's do. Being structurally read-only (rule 2) is
+    # not a substitute for that: bash itself is not withheld, so without this
+    # gate a subagent could run any shell command with no check at all.
     for _ in range(MAX_TURNS):
         fit(messages)  # its context can overflow too, and nobody compacts it
 
@@ -113,16 +120,22 @@ def task(description: str) -> str:
             return report or "(the subagent came back with nothing)"
 
         for tool_call in message.tool_calls:
-            # The same executor the main loop uses, so the same permission
-            # rules and the same sandbox apply. A subagent is a second caller,
-            # not a privileged one - it is not a way around any of that.
-            args, result = execute(tool_call)
+            args = json.loads(tool_call.function.arguments)
+            action, reason = check(tool_call.function.name, args)
+            if action == "deny":
+                result = f"Blocked by policy: {reason}"
+            elif action == "ask" and not ui.approve(reason):
+                result = "User declined this action."
+            else:
+                args, result = execute(tool_call)
             ui.tool(tool_call.function.name, args, result, nested=True)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": result,
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": result,
+                }
+            )
 
     # Out of turns. Hand back whatever it last managed to say rather than
     # nothing at all - a partial finding still beats making the lead agent

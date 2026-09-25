@@ -1,11 +1,18 @@
+import json
 import os
 
-from src.context import reminder
+from src import session
+from src.commands import COMMANDS, handle
+from src.commands import compact as run_compact
+from src.core.compact import needed
+from src.core.context import reminder
+from src.core.history import cap, strip, sweep
+from src.core.todos import TODO_SCHEMA, write_todos
 from src.main import call_llm
-from src.sandbox import name as sandbox_name
+from src.safety.permissions import check
+from src.safety.sandbox import name as sandbox_name
 from src.subagent import TASK_SCHEMA, task
-from src.todos import TODO_SCHEMA, write_todos
-from src.tools import TOOLS, TOOL_SCHEMAS, execute
+from src.tools import TOOL_SCHEMAS, TOOLS, execute
 from src.tui.ui import ui
 
 ALL_SCHEMAS = TOOL_SCHEMAS + [TODO_SCHEMA, TASK_SCHEMA]
@@ -45,34 +52,66 @@ Your current working directory is: {os.getcwd()}
 
 def main():
     ui.banner(sandbox_name())
+    messages = session.open_session(session.CURRENT) or []
+    if messages:
+        ui.replay(messages)
+
     while True:
         user_input = ui.ask()
         if not user_input:
             break
 
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_input},
-        ]
+        if user_input.startswith("/"):
+            messages = handle(user_input.split()[0], messages)
+            continue
+
+        messages.append({"role": "user", "content": user_input})
+        session.save(messages)
 
         while True:
             with ui.working():
                 message, usage = call_llm(messages + [reminder()], tools=ALL_SCHEMAS)
             messages.append(message.model_dump(exclude_none=True))
+            session.save(messages)
             ui.usage(usage)
 
             if message.content:
                 ui.agent(message.content)
-
             if not message.tool_calls:
+                # The turn is over: whatever tool output is sitting unlocked
+                # in the transcript is now just history, not something the
+                # model needs in full any more. Shrink it, and drop the temp
+                # files cap() spilled for those results, before waiting on
+                # the next user message.
+                strip(messages)
+                sweep()
+                session.save(messages)
                 break
 
             for tool_call in message.tool_calls:
-                args, result = execute(tool_call, tools=ALL_TOOLS)
+                args = json.loads(tool_call.function.arguments)
+                action, reason = check(tool_call.function.name, args)
+                if action == "deny":
+                    result = f"Blocked by policy: {reason}"
+                elif action == "ask" and not ui.approve(reason):
+                    result = "User declined this action."
+                else:
+                    _, result = execute(tool_call, tools=ALL_TOOLS)
                 ui.tool(tool_call.function.name, args, result)
                 messages.append(
-                    {"role": "tool", "tool_call_id": tool_call.id, "content": result}
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": cap(result),
+                    }
                 )
+            session.save(messages)
+
+            # The request that just went out is the freshest read we have on
+            # how full the window is. If it crossed the line, compact now,
+            # before the next call, rather than waiting for /compact.
+            if needed(usage):
+                messages = run_compact(messages)
 
 
 if __name__ == "__main__":

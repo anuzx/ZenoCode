@@ -1,9 +1,10 @@
 # function tool
 
 import json
+import os
 
-from src.context import note_read
-from src.sandbox import run
+from src.core.context import note_read
+from src.safety.sandbox import run
 
 
 # bash function
@@ -16,7 +17,9 @@ def bash(command: str) -> str:
 # read_file function
 def read_file(path: str) -> str:
     # read a file and return its content
-    note_read(path)#updates the mtime whenever the read_file tool is used
+    if not os.path.isfile(path):
+        return f"Error: {path} does not exist or is not a file."
+    note_read(path)  # updates the mtime whenever the read_file tool is used
     with open(path) as f:
         return f.read()
 
@@ -31,6 +34,8 @@ def write_file(path: str, content: str) -> str:
 
 # replace a code function
 def str_replace(path, old_str, new_str, allow_multi_edit=False):
+    if not os.path.isfile(path):
+        return f"Error: {path} does not exist or is not a file."
     # swap exact text in a file, old_str must match exactly once
     with open(path) as f:
         content = f.read()
@@ -139,5 +144,8 @@ TOOLS = {
 def execute(tool_call, tools=None):
     lookup = tools or TOOLS
     args = json.loads(tool_call.function.arguments)
-    result = lookup[tool_call.function.name](**args)
+    try:
+        result = lookup[tool_call.function.name](**args)
+    except Exception as e:
+        result = f"Error: {type(e).__name__}: {e}"
     return args, result

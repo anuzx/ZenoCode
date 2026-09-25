@@ -16,8 +16,8 @@ from rich.rule import Rule
 from rich.table import Table
 from rich.text import Text
 
-from . import prompt
-from ..todos import MARKS
+from src.core.todos import MARKS
+from src.tui import prompt
 
 ACCENT = "#7aa2f7"
 USER = "#9ece6a"
@@ -46,7 +46,13 @@ class UI:
             Rule(Text(" Zeno Code ", style=f"bold {ACCENT}"), style=MUTED)
         )
         self.console.print(
-            Padding(Text(f"sandbox: {sandbox_name}  ·  opt-enter for a newline  ·  ctrl-d to exit", style=MUTED), (0, 0, 0, 2))
+            Padding(
+                Text(
+                    f"sandbox: {sandbox_name}  ·  opt-enter for a newline  ·  ctrl-d to exit",
+                    style=MUTED,
+                ),
+                (0, 0, 0, 2),
+            )
         )
 
     def clear(self):
@@ -56,14 +62,18 @@ class UI:
         turns = sum(1 for m in messages if m["role"] == "user")
         self.console.print(
             Padding(
-                Text(f"{label} · {len(messages)} messages · {turns} turns", style=MUTED),
+                Text(
+                    f"{label} · {len(messages)} messages · {turns} turns", style=MUTED
+                ),
                 (0, 0, 0, 2),
             )
         )
 
     def replay(self, messages):
         """Redraw a loaded transcript so the screen matches the history."""
-        results = {m["tool_call_id"]: m["content"] for m in messages if m["role"] == "tool"}
+        results = {
+            m["tool_call_id"]: m["content"] for m in messages if m["role"] == "tool"
+        }
         for message in messages:
             if message["role"] == "user":
                 self.user(message["content"])
@@ -92,7 +102,9 @@ class UI:
         """Numbered list; returns the chosen index or None."""
         self.console.print(Padding(Text(title, style=f"bold {ACCENT}"), (1, 0, 0, 2)))
         for i, row in enumerate(rows):
-            self.console.print(Padding(Text(f"{i:>3}  {row}", style=MUTED), (0, 0, 0, 2)))
+            self.console.print(
+                Padding(Text(f"{i:>3}  {row}", style=MUTED), (0, 0, 0, 2))
+            )
         try:
             answer = prompt.read("\n  number> ").strip()
         except (EOFError, KeyboardInterrupt):
@@ -229,7 +241,9 @@ class UI:
         self.console.print(
             Padding(
                 Panel(
-                    Markdown(summary.replace("<summary>", "").replace("</summary>", "")),
+                    Markdown(
+                        summary.replace("<summary>", "").replace("</summary>", "")
+                    ),
                     title=Text(
                         f"compacted · {before} → {len(messages)} messages",
                         style=f"bold {TOOL}",

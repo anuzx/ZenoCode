@@ -2,7 +2,7 @@ from datetime import datetime
 import os
 import subprocess
 
-from src.todos import todos_prompt
+from src.core.todos import todos_prompt
 
 # alert the agent if a file has changed since it last read it ,this prevents the agent from editing based on stale info
 

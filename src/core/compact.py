@@ -10,7 +10,7 @@ and every trim costs the whole prompt cache.
 """
 
 from src import config
-from src.history import estimate, strip
+from src.core.history import estimate, strip
 from src.main import client
 
 SYSTEM_PROMPT = """

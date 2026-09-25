@@ -27,9 +27,10 @@ PROFILE = f"""(version 1)
 def wrap(command):
     """Wrap a shell command in an OS sandbox. None means we have no sandbox."""
     if sys.platform == "darwin":
-        profile = Path(tempfile.gettempdir()) / "neuralcode.sb"
-        profile.write_text(PROFILE)
-        return ["sandbox-exec", "-f", str(profile), "/bin/sh", "-c", command]
+        handle = tempfile.NamedTemporaryFile(mode="w", suffix=".sb", delete=False)
+        handle.write(PROFILE)
+        handle.close()
+        return ["sandbox-exec", "-f", handle.name, "/bin/sh", "-c", command]
 
     if sys.platform.startswith("linux") and shutil.which("bwrap"):
         return [
@@ -40,6 +41,9 @@ def wrap(command):
             "--bind",
             str(PROJECT),
             str(PROJECT),  # ...except the project, read-write
+            "--ro-bind",
+            str(PROJECT / ".git"),
+            str(PROJECT / ".git"),  # ...and .git within it, back to read-only
             "--dev",
             "/dev",
             "--proc",
