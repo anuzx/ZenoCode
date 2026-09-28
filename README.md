@@ -1,4 +1,4 @@
-# Zeno Code
+# zenocode
 
 A minimal coding agent that runs in your terminal. Point it at any project folder, tell it what you want, and it reads, searches, edits and runs code for you, asking before anything risky.
 
@@ -24,6 +24,10 @@ It works with any OpenAI-compatible API (OpenRouter, OpenAI, local servers, etc.
 | `/compact`  | Summarise the history and free up the context window    |
 
 Keys: `Option+Enter` for a newline, `Ctrl+D` to exit.
+
+## System Architecture
+<img width="3302" height="1072" alt="image" src="https://github.com/user-attachments/assets/281ff612-acff-45dd-a4ee-dd52e29fefad" />
+
 
 ## Tech stack
 
