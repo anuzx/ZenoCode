@@ -13,6 +13,7 @@ from rich.markdown import Markdown
 from rich.padding import Padding
 from rich.panel import Panel
 from rich.rule import Rule
+from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
@@ -25,6 +26,7 @@ TOOL = "#e0af68"
 MUTED = "#565f89"
 
 MAX_TOOL_OUTPUT_LINES = 12
+MAX_WRITE_LINES = 20  # lines of a written file or edit shown before "… N more"
 
 TODO_STYLES = {
     "done": f"{MUTED} strike",
@@ -141,14 +143,21 @@ class UI:
         if name == "write_todos" and args.get("todos"):
             return self.todos(args["todos"])
 
-        header = Text.assemble(
-            (f"{name} ", f"bold {TOOL}"),
-            (self._format_args(args), MUTED),
-        )
+        if name == "write_file" and "content" in args:
+            header, body = self._write_view(args, result)
+        elif name == "str_replace" and "old_str" in args:
+            header, body = self._edit_view(args, result)
+        else:
+            header = Text.assemble(
+                (f"{name} ", f"bold {TOOL}"),
+                (self._format_args(args), MUTED),
+            )
+            body = self._format_result(result)
+
         self.console.print(
             Padding(
                 Panel(
-                    Group(header, Rule(style=MUTED), self._format_result(result)),
+                    Group(header, Rule(style=MUTED), body),
                     border_style=MUTED,
                     padding=(0, 1),
                 ),
@@ -299,6 +308,59 @@ class UI:
         if hidden > 0:
             body.append(f"\n… {hidden} more lines", style=f"italic {TOOL}")
         return body
+
+    def _write_view(self, args, result):
+        """write_file: path in the header, highlighted code in the body."""
+        path, content = args["path"], args["content"]
+        lines = content.splitlines()
+
+        header = Text.assemble(
+            ("write_file ", f"bold {TOOL}"),
+            (path, "bold"),
+            (f"  ·  {len(lines)} lines", MUTED),
+        )
+
+        shown = "\n".join(lines[:MAX_WRITE_LINES])
+        code = Syntax(
+            shown,
+            Syntax.guess_lexer(path, shown),
+            theme="ansi_dark",  # follows your terminal colours
+            line_numbers=True,
+            word_wrap=True,
+            background_color="default",
+        )
+
+        parts = [code]
+        hidden = len(lines) - MAX_WRITE_LINES
+        if hidden > 0:
+            parts.append(Text(f"… {hidden} more lines", style=f"italic {TOOL}"))
+        if result.startswith("Error"):
+            parts.append(Text(result, style="red"))
+        return header, Group(*parts)
+
+    def _edit_view(self, args, result):
+        """str_replace: a small red/green diff instead of raw arguments."""
+        header = Text.assemble(
+            ("str_replace ", f"bold {TOOL}"),
+            (args["path"], "bold"),
+        )
+
+        diff = Text()
+        old = args["old_str"].splitlines() or [""]
+        new = args["new_str"].splitlines() or [""]
+        for line in old[:MAX_WRITE_LINES]:
+            diff.append(f"- {line}\n", style="red")
+        for line in new[:MAX_WRITE_LINES]:
+            diff.append(f"+ {line}\n", style="green")
+        diff.rstrip()
+
+        parts = [diff]
+        hidden = max(len(old) - MAX_WRITE_LINES, 0) + max(len(new) - MAX_WRITE_LINES, 0)
+        if hidden:
+            parts.append(Text(f"… {hidden} more lines", style=f"italic {TOOL}"))
+        if result.startswith("Error"):
+            parts.append(Text(result, style="red"))
+        return header, Group(*parts)
 
 
 ui = UI()

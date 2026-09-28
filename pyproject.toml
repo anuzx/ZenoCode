@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "zeno"
 version = "0.1.0"
-description = "Add your description here"
+description = "A minimal coding agent for the terminal"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -15,5 +15,9 @@ dependencies = [
     "rich>=13",
 ]
 
+[project.scripts]
+zenocode = "src.agent:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["src*"]

@@ -11,7 +11,12 @@ from src.safety.sandbox import run
 def bash(command: str) -> str:
     # run bash commands
     result = run(command)
-    return result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    if result.returncode != 0:
+        # Without this an empty failing command looks identical to success,
+        # and the model keeps retrying without knowing it failed.
+        output += f"\n[exit code {result.returncode}]"
+    return output
 
 
 # read_file function

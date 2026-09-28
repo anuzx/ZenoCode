@@ -42,6 +42,9 @@ BASH_RULES = {
     "git ls-files*": "allow",
     "pytest*": "allow",
     "python -m pytest*": "allow",
+    # harmless writes: the sandbox already confines them to the project
+    "mkdir *": "allow",
+    "touch *": "allow",
     # risky: never, even if the user says yes
     "rm *": "deny",
     "sudo *": "deny",

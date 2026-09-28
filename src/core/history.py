@@ -39,7 +39,7 @@ SPILLS = []  # temp files belonging to the current turn
 def spill(text):
     """Park the full output on disk for the rest of this turn."""
     handle = tempfile.NamedTemporaryFile(
-        mode="w", prefix="neuralcode-", suffix=".txt", delete=False
+        mode="w", prefix="zenocode-", suffix=".txt", delete=False
     )
     handle.write(text)
     handle.close()

@@ -15,6 +15,8 @@ from src.subagent import TASK_SCHEMA, task
 from src.tools import TOOL_SCHEMAS, TOOLS, execute
 from src.tui.ui import ui
 
+MAX_STEPS = 30  # model calls per user message, so a failing loop cannot run forever
+
 ALL_SCHEMAS = TOOL_SCHEMAS + [TODO_SCHEMA, TASK_SCHEMA]
 ALL_TOOLS = {**TOOLS, "write_todos": write_todos, "task": task}
 
@@ -45,6 +47,18 @@ whose path is given at the cut. Page through it with head, tail, sed -n or
 grep rather than asking for it again. That file only exists for the current
 turn, so read it now or re-run the command later.
 
+Each bash call runs in a fresh shell, so `cd` does not carry over to the next
+call. Chain what belongs together: `cd backend && bun add express`.
+
+Never run commands that wait for input. Pass the non-interactive flags
+(`bun init -y`, `npm init -y`, `npm create vite@latest app -- --template react`).
+Package managers (bun, npm, pip) get network access, but only after the user
+approves the command.
+
+If the same command fails twice, stop. Explain the error to the user instead
+of retrying it a third time. Read [exit code N] at the end of bash output: it
+means the command failed, even when nothing else was printed.
+
 Your current working directory is: {os.getcwd()}
 
 """
@@ -68,7 +82,19 @@ def main():
         messages.append({"role": "user", "content": user_input})
         session.save(messages)
 
+        steps = 0
         while True:
+            steps += 1
+            if steps > MAX_STEPS:
+                ui.note(
+                    f"stopped after {MAX_STEPS} steps in one turn - "
+                    "tell me to continue, or change the plan"
+                )
+                strip(messages)
+                sweep()
+                session.save(messages)
+                break
+
             with ui.working():
                 message, usage = call_llm(messages + [reminder()], tools=ALL_SCHEMAS)
             messages.append(message.model_dump(exclude_none=True))
